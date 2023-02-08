@@ -258,7 +258,7 @@ private ChooseNextOperatingState() {
                 // Out of order event delivery? Race? Doesn't matter. Nothing we can really do about it. Hope
                 // another set-point-set comes along to make them consistent soon!
                 log.err "inconsistent set-points -- unable to determine new state"
-                    return []
+                return []
             }
 
             if (state.operatingState == "idle")
@@ -297,12 +297,15 @@ private ChooseNextOperatingState() {
 private toOperatingState(String nxtOperatingState) {
     def ttxt = "${state.operatingState} -> ${nxtOperatingState}"
     logDebug ttxt
-
-    if (nxtOperatingState == state.operatingState)
-        return []
-
+    
     def events = []
-    if (nxtOperatingState == "idle") {
+    if (nxtOperatingState == state.operatingState) {
+        if (nxtOperatingState != "idle" || device.currentValue("thermostatOperatingState") == "idle") {
+            // Nothing to do -- Short out
+            return []
+        }
+        // Here only if all we need to accomplish is to remove a "pending" notice.
+    } else if (nxtOperatingState == "idle") {
         // Transitioning into the "idle" state.
         state.lastIdle = Instant.now().toString()
     } else if (state.operatingState == "idle") {
@@ -314,6 +317,7 @@ private toOperatingState(String nxtOperatingState) {
             long nSec = timeout.getEpochSecond() - now.getEpochSecond() + 1
             logDebug "delay ${ttxt}, idle wait; Retry in ${nSec}"
             runIn(nSec, idleTimeoutHandler)
+            // Just need to publish what we wanted to do, but couldn't yet. Set that up and short out.
             def Map m = ["heating":"pending heat", "cooling":"pending cool"]
             events << [name:"thermostatOperatingState", value:m[nxtOperatingState]]
             return events
